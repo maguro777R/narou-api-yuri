@@ -3,9 +3,11 @@ from html.parser import HTMLParser
 from pathlib import Path
 from tempfile import TemporaryDirectory
 import unittest
+from unittest.mock import patch
 
 from scripts.demo import demo_cohorts
-from scripts.narou import Cohort, JST, parse_novel
+from scripts.narou import Cohort, DataError, JST, parse_novel
+from scripts.build import main
 from scripts.render import render_page, render_unavailable, write_site
 from tests.test_data import row
 
@@ -62,6 +64,23 @@ class RenderTests(unittest.TestCase):
             output = Path(directory)
             write_site(render_unavailable(), output)
             self.assertEqual({item.name for item in output.iterdir()}, {'index.html', 'styles.css', 'app.js', 'favicon.svg', '.nojekyll'})
+
+    def test_unexpected_data_file_cannot_be_published(self):
+        with TemporaryDirectory() as directory:
+            output = Path(directory)
+            (output / 'data.json').write_text('{}')
+            with self.assertRaises(ValueError):
+                write_site(render_unavailable(), output)
+            self.assertFalse((output / 'index.html').exists())
+
+    def test_failed_collection_preserves_previous_page(self):
+        with TemporaryDirectory() as directory:
+            output = Path(directory)
+            (output / 'index.html').write_text('previous successful page')
+            with patch('sys.argv', ['build', '--live', '--output', directory]), patch('scripts.build.collect', side_effect=DataError('incomplete')):
+                with self.assertRaises(DataError):
+                    main()
+            self.assertEqual((output / 'index.html').read_text(), 'previous successful page')
 
 
 if __name__ == "__main__":

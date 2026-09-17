@@ -118,11 +118,17 @@ def render_unavailable() -> str:
 
 
 def write_site(html: str, output: Path) -> None:
+    allowed = {"index.html", "index.html.tmp", "styles.css", "app.js", "favicon.svg", ".nojekyll"}
+    if output.is_symlink():
+        raise ValueError("出力先にシンボリックリンクは指定できません")
     output.mkdir(parents=True, exist_ok=True)
+    for item in output.iterdir():
+        if item.name not in allowed or item.is_symlink() or not item.is_file():
+            raise ValueError("出力先に想定外のファイルがあります。空の専用フォルダを指定してください")
+    for name in ("styles.css", "app.js", "favicon.svg"):
+        (output / name).write_bytes((ROOT / "web" / name).read_bytes())
+    (output / ".nojekyll").touch()
     # 新しいページができるまで既存の index.html を書き換えない。
     temporary = output / "index.html.tmp"
     temporary.write_text(html, encoding="utf-8")
     temporary.replace(output / "index.html")
-    for name in ("styles.css", "app.js", "favicon.svg"):
-        (output / name).write_bytes((ROOT / "web" / name).read_bytes())
-    (output / ".nojekyll").touch()
