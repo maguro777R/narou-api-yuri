@@ -115,8 +115,10 @@ def parse_response(payload: object, *, limit: int, genre: int | None = None) -> 
         raise DataError("API 応答の先頭に件数情報がありません")
     available = integer(payload[0], "allcount")
     novels = tuple(parse_novel(row) for row in payload[1:])
-    if len(novels) > limit or (available > 0 and not novels):
+    if len(novels) > limit or (available > 0 and not novels) or (available == 0 and novels):
         raise DataError("API 応答の作品件数が不正です")
+    if available >= limit and len(novels) < limit:
+        raise DataError("API 応答が途中で切れている可能性があります")
     if len({novel.ncode for novel in novels}) != len(novels):
         raise DataError("同じ作品が重複しています")
     if genre is not None and any(novel.genre != genre for novel in novels):
@@ -164,6 +166,7 @@ class Client:
                     body = response.read(MAX_RESPONSE_BYTES + 1)
                 return parse_response(decode_response(body), limit=limit, genre=genre)
             except HTTPError as exc:
+                exc.close()
                 if exc.code not in (429, 500, 502, 503, 504) or attempt == 2:
                     raise
                 retry_after = exc.headers.get("Retry-After", "") if exc.headers else ""
@@ -183,6 +186,8 @@ def collect(client: Client | None = None) -> tuple[Cohort, ...]:
         (str(code), label, code, 100) for code, label in GENRES.items()
     ]:
         available, novels = client.fetch(limit=limit, genre=genre)
+        if key == "all" and not novels:
+            raise DataError("全ジャンルの週間ポイントがすべて空のため、公開を止めました")
         cohorts.append(Cohort(key, label, limit, available, novels))
         # ログに取得した作品名やキーワードを出さない。
         print(f"取得: {label} / 週間ポイント 1 以上 {len(novels)} 作品", flush=True)

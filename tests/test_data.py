@@ -42,6 +42,8 @@ class ParsingTests(unittest.TestCase):
             [{"allcount": 2}, row(), row(ncode="N0002ZZ", weekly_point=101)],
             [{"allcount": 1}, row(genre=101)],
             [{"allcount": 1}, row(weekly_point="100")],
+            [{"allcount": 100}, row()],
+            [{"allcount": 0}, row()],
         ]
         for payload in cases:
             with self.subTest(payload=payload), self.assertRaises(DataError):
@@ -65,12 +67,12 @@ class ParsingTests(unittest.TestCase):
         self.assertNotIn("s", params["of"][0].split("-"))
 
     def test_rate_limit_retries_but_bad_request_does_not(self):
-        error = HTTPError("https://example.invalid", 429, "busy", {"Retry-After": "8"}, None)
+        error = HTTPError("https://example.invalid", 429, "busy", {"Retry-After": "8"}, io.BytesIO())
         open_url = Mock(side_effect=[error, io.BytesIO(b'[{"allcount":0}]')])
         sleep = Mock()
         self.assertEqual(Client(open_url=open_url, sleep=sleep).fetch(limit=100), (0, ()))
         self.assertIn(unittest.mock.call(8), sleep.call_args_list)
-        error = HTTPError("https://example.invalid", 403, "denied", {}, None)
+        error = HTTPError("https://example.invalid", 403, "denied", {}, io.BytesIO())
         open_url = Mock(side_effect=error)
         with self.assertRaises(HTTPError):
             Client(open_url=open_url, sleep=Mock()).fetch(limit=100)
