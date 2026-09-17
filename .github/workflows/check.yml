@@ -1,0 +1,30 @@
+name: 変更を確認する
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: 集計と画面作成をテスト
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: ソースコードを読む
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+      - name: Python を準備
+        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+        with:
+          python-version: '3.13'
+      - name: 数え方・安全な表示・期限切れの処理を確認
+        run: python -m unittest discover -v
+      - name: 画面切り替えの構文を確認
+        run: node --check web/app.js
+      - name: 架空データだけでページを作成
+        run: python -m scripts.build --demo

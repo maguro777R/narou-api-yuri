@@ -1,0 +1,100 @@
+name: 週間の観測と公開
+
+on:
+  # main に変更を反映したときにも、画面を更新します。
+  push:
+    branches: [main]
+    paths:
+      - 'scripts/**'
+      - 'web/**'
+      - '.github/workflows/publish.yml'
+  schedule:
+    # UTC 月曜 21:23 = 日本時間 火曜 06:23。API 取得は週 1 回。
+    - cron: '23 21 * * 1'
+    # 日本時間 毎朝 06:53。自分の公開ページの日付だけ確認します。
+    - cron: '53 21 * * *'
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: 'refresh: 最新を取得 / maintenance: 休止案内に切り替え'
+        required: true
+        default: refresh
+        type: choice
+        options: [refresh, maintenance]
+
+permissions:
+  contents: read
+
+# 同時実行によって新しいページが古いページに戻ることを防ぎます。
+concurrency:
+  group: github-pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    name: 取得してページを作る
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      pages: read
+    outputs:
+      deploy: ${{ steps.prepare.outputs.deploy }}
+    steps:
+      - name: ソースコードを読む
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+      - name: Python を準備
+        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+        with:
+          python-version: '3.13'
+      - name: 公開前に集計と画面をテスト
+        run: python -m unittest discover -v
+      - name: 画面切り替えの構文を確認
+        run: node --check web/app.js
+      - name: 公開先を確認
+        id: pages
+        uses: actions/configure-pages@983d7736d9b0ae728b81ab479565c72886d7745b # v5
+      - name: 最新の観測結果または休止案内を準備
+        id: prepare
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          EVENT_SCHEDULE: ${{ github.event.schedule }}
+          REQUESTED_MODE: ${{ inputs.mode }}
+          SITE_URL: ${{ steps.pages.outputs.base_url }}
+        shell: bash
+        run: |
+          if [[ "$REQUESTED_MODE" == "maintenance" ]]; then
+            python -m scripts.build --unavailable
+            echo "deploy=true" >> "$GITHUB_OUTPUT"
+          elif [[ "$EVENT_NAME" == "schedule" && "$EVENT_SCHEDULE" == "53 21 * * *" ]]; then
+            python -m scripts.freshness --url "$SITE_URL/" --github-output "$GITHUB_OUTPUT"
+          else
+            python -m scripts.build --live
+            echo "deploy=true" >> "$GITHUB_OUTPUT"
+          fi
+      - name: 公開ページだけを受け渡す（保存は 1 日）
+        if: steps.prepare.outputs.deploy == 'true'
+        uses: actions/upload-pages-artifact@7b1f4a764d45c48632c6b24a0339c27f5614fb0b # v4
+        with:
+          path: site
+          retention-days: 1
+
+  deploy:
+    name: GitHub Pages に公開
+    needs: build
+    if: needs.build.outputs.deploy == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: 新しいページに切り替える
+        id: deployment
+        uses: actions/deploy-pages@d6db90164ac5ed86f2b6aed7e0febac5b3c0c03e # v4
