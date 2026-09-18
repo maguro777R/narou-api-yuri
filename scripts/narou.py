@@ -150,8 +150,8 @@ def parse_response(payload: object, *, limit: int, source: str = "general", matc
     points = [novel.weekly_point for novel in novels]
     if points != sorted(points, reverse=True):
         raise DataError("週間ポイント順になっていません")
-    # 0 ポイントの同順位作品から傾向を作ると、抽出順の影響が大きすぎる。
-    return available, tuple(novel for novel in novels if novel.weekly_point > 0)
+    # 後の検索で 0 になった作品も重複処理へ渡し、古い正の値を残さない。
+    return available, novels
 
 
 def decode_response(body: bytes) -> object:
@@ -213,7 +213,9 @@ class Client:
 def merge_candidates(groups: tuple[tuple[Novel, ...], ...], *, limit: int = SAMPLE_LIMIT) -> tuple[Novel, ...]:
     """同じ作品を一度だけ数える。取得時刻の差は後の応答を採用する。"""
     by_code = {(novel.source, novel.ncode): novel for group in groups for novel in group}
-    return tuple(sorted(by_code.values(), key=lambda novel: (-novel.weekly_point, novel.ncode))[:limit])
+    # 0 ポイントの同順位作品から傾向を作ると、抽出順の影響が大きすぎる。
+    positive = (novel for novel in by_code.values() if novel.weekly_point > 0)
+    return tuple(sorted(positive, key=lambda novel: (-novel.weekly_point, novel.ncode))[:limit])
 
 
 def collect(client: Client | None = None, *, sources: tuple[str, ...] = tuple(SOURCES)) -> tuple[Cohort, ...]:

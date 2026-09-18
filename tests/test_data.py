@@ -32,10 +32,11 @@ class ParsingTests(unittest.TestCase):
         item["novel_type"] = item.pop("noveltype")
         self.assertEqual(parse_novel(item).novel_type, 1)
 
-    def test_metadata_is_not_a_work_and_zero_points_are_excluded(self):
+    def test_metadata_is_not_a_work_and_zero_points_are_excluded_after_merging(self):
         count, novels = parse_response([{"allcount": 30}, row(), row(ncode="N0002ZZ", weekly_point=0)], limit=100)
         self.assertEqual(count, 30)
-        self.assertEqual(len(novels), 1)
+        self.assertEqual(len(novels), 2)
+        self.assertEqual(len(merge_candidates((novels,))), 1)
 
     def test_malformed_duplicate_unsorted_or_non_gl_fails(self):
         cases = [
@@ -102,6 +103,11 @@ class ParsingTests(unittest.TestCase):
         second = parse_novel(row(ncode="N0002ZZ", weekly_point=100))
         third = parse_novel(row(ncode="N0003ZZ", weekly_point=60))
         self.assertEqual(merge_candidates(((first, third), (second, later)), limit=2), (second, later))
+
+    def test_later_zero_points_replace_earlier_positive_points(self):
+        first = parse_novel(row(weekly_point=5))
+        later = parse_novel(row(weekly_point=0))
+        self.assertEqual(merge_candidates(((first,), (later,))), ())
 
     def test_collection_keeps_sources_separate_and_never_adds_matching_counts(self):
         general = parse_novel(row())
