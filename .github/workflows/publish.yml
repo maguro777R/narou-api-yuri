@@ -64,6 +64,8 @@ jobs:
           EVENT_SCHEDULE: ${{ github.event.schedule }}
           REQUESTED_MODE: ${{ inputs.mode }}
           SITE_URL: ${{ steps.pages.outputs.base_url }}
+          # 運用者の登録・R18 利用条件を確認してから true にします。
+          NAROU_API_ENABLED: ${{ vars.NAROU_API_ENABLED }}
         shell: bash
         run: |
           if [[ "$REQUESTED_MODE" == "maintenance" ]]; then
@@ -71,6 +73,10 @@ jobs:
             echo "deploy=true" >> "$GITHUB_OUTPUT"
           elif [[ "$EVENT_NAME" == "schedule" && "$EVENT_SCHEDULE" == "53 21 * * *" ]]; then
             python -m scripts.freshness --url "$SITE_URL/" --github-output "$GITHUB_OUTPUT"
+          elif [[ "$NAROU_API_ENABLED" != "true" ]]; then
+            python -m scripts.build --unavailable
+            echo "deploy=true" >> "$GITHUB_OUTPUT"
+            echo 'API 取得は未有効化です。運用ガイドの初回設定を確認してください。' >> "$GITHUB_STEP_SUMMARY"
           else
             python -m scripts.build --live
             echo "deploy=true" >> "$GITHUB_OUTPUT"

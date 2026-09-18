@@ -40,7 +40,7 @@ def needs_retirement(html: str, now: datetime) -> bool:
 
 
 def check_url(url: str, now: datetime, *, open_url=urlopen) -> bool:
-    request = Request(url, headers={"User-Agent": "NarouObservatory-Freshness/1.0", "Cache-Control": "no-cache"})
+    request = Request(url, headers={"User-Agent": "NarouYuriObservatory-Freshness/1.0", "Cache-Control": "no-cache"})
     try:
         with open_url(request, timeout=30) as response:
             body = response.read(MAX_RESPONSE_BYTES + 1)
@@ -54,13 +54,19 @@ def check_url(url: str, now: datetime, *, open_url=urlopen) -> bool:
     return needs_retirement(body.decode("utf-8"), now)
 
 
+def check_site(url: str, now: datetime, *, open_url=urlopen) -> bool:
+    """一般向けが新しくても、成人向けのページだけ古い場合を見逃さない。"""
+    base = url.rstrip("/")
+    return any(check_url(f"{base}/{name}", now, open_url=open_url) for name in ("index.html", "r18.html"))
+
+
 def main():
     parser = argparse.ArgumentParser(description="公開ページの期限を確認します")
     parser.add_argument("--url", required=True)
     parser.add_argument("--output", type=Path, default=ROOT / "site")
     parser.add_argument("--github-output", type=Path, required=True)
     args = parser.parse_args()
-    retire = check_url(args.url, datetime.now(JST))
+    retire = check_site(args.url, datetime.now(JST))
     if retire:
         write_site(render_unavailable(), args.output)
     with args.github_output.open("a", encoding="utf-8") as output:
