@@ -13,8 +13,8 @@ LENGTH_BINS = (
     (100_000, "5〜10 万字"), (300_000, "10〜30 万字"),
     (None, "30 万字以上"),
 )
-# 題材として読みづらい必須注意タグのみ除外。応募タグなどは勝手に消さない。
-EXCLUDED_KEYWORDS = {"r15", "残酷な描写あり"}
+# 対象を選ぶための語と注意タグは、題材の比較から外す。部分一致では消さない。
+EXCLUDED_KEYWORDS = {"r15", "r18", "残酷な描写あり", "ガールズラブ", "百合", "gl"}
 
 
 def keywords(text: str) -> set[str]:
@@ -29,7 +29,8 @@ def summarize(novels: tuple[Novel, ...]) -> dict:
     length_counts: Counter = Counter()
     for novel in novels:
         keyword_counts.update(keywords(novel.keyword))
-        genre_counts[novel.genre] += 1
+        if novel.genre is not None:
+            genre_counts[novel.genre] += 1
         status_counts[novel.status] += 1
         for maximum, label in LENGTH_BINS:
             if maximum is None or novel.length < maximum:

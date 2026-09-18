@@ -7,7 +7,7 @@ from urllib.error import HTTPError
 from urllib.parse import parse_qs, urlparse
 
 from scripts.analysis import keywords, summarize
-from scripts.narou import Client, DataError, decode_response, parse_novel, parse_response
+from scripts.narou import Client, DataError, collect, decode_response, merge_candidates, parse_novel, parse_response
 
 
 def row(**changes):
@@ -15,6 +15,7 @@ def row(**changes):
         "ncode": "N0001ZZ", "title": "テスト用の架空作品", "writer": "架空の作者",
         "genre": 201, "keyword": "冒険 冒険　友情", "general_firstup": "2026-01-01 12:00:00",
         "noveltype": 1, "end": 1, "general_all_no": 10, "length": 10000, "weekly_point": 100,
+        "isgl": 1,
     }
     result.update(changes)
     return result
@@ -36,18 +37,18 @@ class ParsingTests(unittest.TestCase):
         self.assertEqual(count, 30)
         self.assertEqual(len(novels), 1)
 
-    def test_malformed_duplicate_unsorted_or_wrong_genre_fails(self):
+    def test_malformed_duplicate_unsorted_or_non_gl_fails(self):
         cases = [
             [], [{"allcount": 10}], [{"allcount": 2}, row(), row()],
             [{"allcount": 2}, row(), row(ncode="N0002ZZ", weekly_point=101)],
-            [{"allcount": 1}, row(genre=101)],
+            [{"allcount": 1}, row(isgl=0)],
             [{"allcount": 1}, row(weekly_point="100")],
             [{"allcount": 100}, row()],
             [{"allcount": 0}, row()],
         ]
         for payload in cases:
             with self.subTest(payload=payload), self.assertRaises(DataError):
-                parse_response(payload, limit=100, genre=201)
+                parse_response(payload, limit=100)
 
     def test_empty_genre_is_valid(self):
         self.assertEqual(parse_response([{"allcount": 0}], limit=100), (0, ()))
@@ -60,11 +61,64 @@ class ParsingTests(unittest.TestCase):
 
     def test_request_uses_weekly_points_and_only_needed_fields(self):
         open_url = Mock(return_value=io.BytesIO(json.dumps([{"allcount": 1}, row()]).encode()))
-        Client(open_url=open_url, sleep=Mock()).fetch(limit=100, genre=201)
+        Client(open_url=open_url, sleep=Mock()).fetch(limit=100)
         params = parse_qs(urlparse(open_url.call_args.args[0].full_url).query)
         self.assertEqual(params["order"], ["weeklypoint"])
-        self.assertEqual(params["genre"], ["201"])
+        self.assertEqual(params["isgl"], ["1"])
+        self.assertIn("igl", params["of"][0].split("-"))
         self.assertNotIn("s", params["of"][0].split("-"))
+
+    def test_yuri_search_is_only_keywords_and_keeps_unflagged_works(self):
+        open_url = Mock(return_value=io.BytesIO(json.dumps([{"allcount": 1}, row(isgl=0, keyword="青春 百合")]).encode()))
+        _, novels = Client(open_url=open_url, sleep=Mock()).fetch(limit=500, match="yuri")
+        params = parse_qs(urlparse(open_url.call_args.args[0].full_url).query)
+        self.assertEqual(params["word"], ["百合"])
+        self.assertEqual(params["keyword"], ["1"])
+        self.assertNotIn("isgl", params)
+        self.assertFalse(novels[0].is_gl)
+        with self.assertRaises(DataError):
+            parse_response([{"allcount": 1}, row(keyword="友情")], limit=500, match="yuri")
+
+    def test_adult_response_must_be_nocturne_and_uses_adult_link(self):
+        item = row(nocgenre=1)
+        del item["genre"]
+        open_url = Mock(return_value=io.BytesIO(json.dumps([{"allcount": 1}, item]).encode()))
+        _, novels = Client(open_url=open_url, sleep=Mock()).fetch(limit=500, source="nocturne")
+        url = urlparse(open_url.call_args.args[0].full_url)
+        params = parse_qs(url.query)
+        self.assertEqual(url.path, "/novel18api/api/")
+        self.assertEqual(params["nocgenre"], ["1"])
+        self.assertIn("ng", params["of"][0].split("-"))
+        self.assertNotIn("g", params["of"][0].split("-"))
+        self.assertIsNone(novels[0].genre)
+        self.assertEqual(novels[0].url, "https://novel18.syosetu.com/n0001zz/")
+        for invalid in (0, 2, 3, 4):
+            with self.subTest(invalid=invalid), self.assertRaises(DataError):
+                parse_novel(row(nocgenre=invalid), source="nocturne")
+
+    def test_union_deduplicates_then_selects_weekly_top(self):
+        first = parse_novel(row(weekly_point=50))
+        later = parse_novel(row(weekly_point=60))
+        second = parse_novel(row(ncode="N0002ZZ", weekly_point=100))
+        third = parse_novel(row(ncode="N0003ZZ", weekly_point=60))
+        self.assertEqual(merge_candidates(((first, third), (second, later)), limit=2), (second, later))
+
+    def test_collection_keeps_sources_separate_and_never_adds_matching_counts(self):
+        general = parse_novel(row())
+        adult = parse_novel(row(nocgenre=1), source="nocturne")
+        client = Mock()
+        client.fetch.side_effect = [(80, (general,)), (20, (general,)), (8, (adult,)), (2, (adult,))]
+        cohorts = collect(client)
+        self.assertEqual([len(c.novels) for c in cohorts], [1, 1])
+        self.assertEqual([c.source for c in cohorts], ["general", "nocturne"])
+        self.assertTrue(all(c.available is None for c in cohorts))
+        self.assertEqual(cohorts[0].matches, (("gl", 80), ("yuri", 20)))
+        self.assertEqual(client.fetch.call_count, 4)
+
+    def test_no_reactions_is_a_valid_empty_observation(self):
+        client = Mock()
+        client.fetch.return_value = (0, ())
+        self.assertEqual(collect(client, sources=("general",))[0].novels, ())
 
     def test_rate_limit_retries_but_bad_request_does_not(self):
         error = HTTPError("https://example.invalid", 429, "busy", {"Retry-After": "8"}, io.BytesIO())
@@ -93,6 +147,9 @@ class AnalysisTests(unittest.TestCase):
 
     def test_no_data_is_not_zero_median(self):
         self.assertIsNone(summarize(())["median_length"])
+
+    def test_selection_terms_are_excluded_without_removing_compound_themes(self):
+        self.assertEqual(keywords("百合 ガールズラブ ＧＬ R18 TS百合 学園百合"), {"ts百合", "学園百合"})
 
 
 if __name__ == "__main__":
