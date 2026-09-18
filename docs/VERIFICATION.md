@@ -25,4 +25,9 @@ python3 -m scripts.build --demo
 
 実データの取得は、運用者のなろうユーザ登録と R18 利用の年齢条件の確認待ちです。架空データでの成功を実 API の動作確認とは扱いません。
 
-公開・週次実行の確認結果は、実行後にこの欄へ記録します。
+- [GitHub 上の自動テスト](https://github.com/maguro777R/narou-api-yuri/actions/runs/35345403970): 成功。
+- [初回の Pages 公開](https://github.com/maguro777R/narou-api-yuri/actions/runs/35345403877): 成功。API 取得を有効化せず、作品情報のない休止案内を公開。
+- [公開 URL](https://maguro777r.github.io/narou-api-yuri/): 一般向け・R18 両ページの取得と期限確認処理が成功。
+- 毎週火曜 6:23 ごろの取得・公開と、毎朝 6:53 ごろの期限確認を設定済み。定刻の週次実行そのものは次回予定待ち。
+
+残っているのは、運用者の条件確認後の実 API 取得と、その応答を使ったページ公開です。`NAROU_API_ENABLED` は未設定なので、現時点でなろうへの定期取得は始まりません。
