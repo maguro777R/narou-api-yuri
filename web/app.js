@@ -1,16 +1,19 @@
 "use strict";
 
 // 数字は HTML に描画済み。閲覧者のブラウザから API を取得しない。
-const genreSelect = document.querySelector("#genre");
-const statusInputs = [...document.querySelectorAll('input[name="status"]')];
-const observations = [...document.querySelectorAll(".observation")];
+const ageGate = document.querySelector("#age-gate");
 const expiresAt = Date.parse(document.body.dataset.expires);
+let ageConfirmed = !ageGate;
+let genreSelect;
+let statusInputs = [];
+let observations = [];
 
 function checkFreshness() {
   if (!Number.isFinite(expiresAt)) return false;
   const expired = Date.now() >= expiresAt;
-  document.querySelector("#live-content").hidden = expired;
+  document.querySelector("#live-content").hidden = expired || !ageConfirmed;
   document.querySelector("#expired").hidden = !expired;
+  if (ageGate) ageGate.hidden = expired || ageConfirmed;
   const warning = document.querySelector("#update-warning");
   if (warning) warning.hidden = Date.now() < expiresAt - 6 * 24 * 60 * 60 * 1000;
   return expired;
@@ -37,7 +40,11 @@ function updateSelection(writeUrl = true) {
   }
 }
 
-if (genreSelect) {
+function initializeFilters() {
+  genreSelect = document.querySelector("#genre");
+  if (!genreSelect) return;
+  statusInputs = [...document.querySelectorAll('input[name="status"]')];
+  observations = [...document.querySelectorAll(".observation")];
   const params = new URLSearchParams(window.location.search);
   if ([...genreSelect.options].some((option) => option.value === params.get("genre"))) {
     genreSelect.value = params.get("genre");
@@ -50,6 +57,21 @@ if (genreSelect) {
   updateSelection(false);
 }
 
+if (ageGate) {
+  document.querySelector("#confirm-age").addEventListener("click", () => {
+    if (checkFreshness()) return;
+    const template = document.querySelector("#adult-content");
+    document.querySelector("#live-content").append(template.content.cloneNode(true));
+    template.remove();
+    ageConfirmed = true;
+    initializeFilters();
+    checkFreshness();
+    genreSelect?.focus();
+  });
+} else {
+  initializeFilters();
+}
+
 for (const link of document.querySelectorAll(".nav-link")) {
   link.addEventListener("click", () => {
     document.querySelector(".nav-link.active")?.classList.remove("active");
@@ -57,6 +79,6 @@ for (const link of document.querySelectorAll(".nav-link")) {
   });
 }
 checkFreshness();
-// ページを開きっぱなしにした場合も、古くなったデータを表示し続けない。
+// 開きっぱなしでも確認前の R18 データや期限切れの情報を表示しない。
 setInterval(checkFreshness, 60_000);
 document.addEventListener("visibilitychange", checkFreshness);

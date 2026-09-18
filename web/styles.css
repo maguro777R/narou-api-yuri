@@ -3,7 +3,7 @@
   --ink: #243a35;
   --muted: #6c7772;
   --line: #e1e6df;
-  --green: #517d67;
+  --green: #807a9e;
   --pale-green: #e9efe7;
   --orange: #b07c54;
   --blue: #748d9d;
@@ -18,7 +18,7 @@ body { margin: 0; font-size: 14px; line-height: 1.8; }
 [hidden] { display: none !important; }
 a { color: inherit; text-underline-offset: 4px; }
 a:hover { color: #37694e; }
-a:focus-visible, select:focus-visible, summary:focus-visible { outline: 3px solid #b07c54; outline-offset: 4px; }
+a:focus-visible, button:focus-visible, select:focus-visible, summary:focus-visible { outline: 3px solid #b07c54; outline-offset: 4px; }
 .sr-only, .skip-link:not(:focus) { position: absolute; width: 1px; height: 1px; padding: 0; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
 .skip-link:focus { position: fixed; top: 8px; left: 8px; background: white; padding: 12px; z-index: 10; }
 .sidebar { position: fixed; inset: 0 auto 0 0; width: 226px; border-right: 1px solid var(--line); padding: 40px 24px; background: #f0f3ed; display: flex; flex-direction: column; }
@@ -42,6 +42,16 @@ main { margin-left: 226px; max-width: 1410px; padding: 24px 48px 28px; }
 h1 { font-family: "Hiragino Mincho ProN", "Yu Mincho", "YuMincho", serif; font-size: clamp(27px, 2.7vw, 40px); letter-spacing: .055em; font-weight: 600; margin: 0 0 16px; line-height: 1.55; }
 .hero > p:not(.eyebrow) { font-size: 13px; color: #65746b; line-height: 2; margin: 0; }
 .hero-badge { position: absolute; bottom: 33px; right: 0; font-size: 10px; color: #6b786c; }
+.source-tabs { display: flex; gap: 8px; flex-wrap: wrap; margin: 0 0 16px; }
+.source-tabs a { text-decoration: none; padding: 9px 18px; border: 1px solid var(--line); border-radius: 5px; font-size: 12px; }
+.source-tabs a[aria-current="page"] { background: #eeeaf5; border-color: #b7aecb; color: #51476a; font-weight: 650; }
+.source-tabs small { font-size: 10px; font-weight: normal; margin-left: 6px; }
+.scope-guide { border-left: 3px solid #b7aecb; padding: 6px 16px; margin: 16px 0 25px; }
+.scope-guide strong { font-size: 13px; }
+.scope-guide p { font-size: 11px; color: var(--muted); margin: 4px 0 0; }
+.sample-note { font-size: 11px; color: #756140; margin: -10px 0 20px; }
+.gate-actions { display: flex; gap: 20px; align-items: center; flex-wrap: wrap; margin-top: 20px; }
+.gate-actions button { font: inherit; padding: 11px 18px; border: 0; border-radius: 5px; background: #51476a; color: white; cursor: pointer; }
 .filters { border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); padding: 18px 0; display: flex; justify-content: space-between; gap: 20px; align-items: center; }
 .genre-filter { display: flex; align-items: center; gap: 14px; font-size: 12px; font-weight: 600; }
 select { background: white; border: 1px solid #cbd4c8; border-radius: 5px; padding: 10px 34px 10px 12px; font: inherit; min-width: 190px; color: var(--ink); }
